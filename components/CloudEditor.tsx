@@ -30,8 +30,11 @@ export default function CloudEditor() {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [context, setContext] = useState<any>(null);
+  const [question, setQuestion] = useState("");
 
-  const unsaved = active && active.code !== original;
+  const unsaved =
+    active &&
+    (active.code !== original || question !== (active.question || ""));
 
   /* ---------- Load Files ---------- */
   async function loadFiles() {
@@ -41,6 +44,7 @@ export default function CloudEditor() {
     if (data?.length && !active) {
       setActive(data[0]);
       setOriginal(data[0].code);
+      setQuestion(data[0].question || "");
     }
   }
 
@@ -53,7 +57,9 @@ export default function CloudEditor() {
     if (!newName.trim()) return;
 
     // Check if file with same name already exists
-    const duplicateFile = files.find(f => f.name.toLowerCase() === newName.trim().toLowerCase());
+    const duplicateFile = files.find(
+      (f) => f.name.toLowerCase() === newName.trim().toLowerCase(),
+    );
     if (duplicateFile) {
       alert(`File "${newName}" already exists!`);
       return;
@@ -61,7 +67,11 @@ export default function CloudEditor() {
 
     const { data } = await supabase
       .from("files")
-      .insert({ name: newName, code: "// new file" })
+      .insert({
+        name: newName,
+        code: "// new file",
+        question: "",
+      })
       .select();
 
     const created = data?.[0];
@@ -85,10 +95,17 @@ export default function CloudEditor() {
 
     await supabase
       .from("files")
-      .update({ code: active.code })
+      .update({
+        code: active.code,
+        question: question,
+      })
       .eq("id", active.id);
 
     setOriginal(active.code);
+    setActive({
+      ...active,
+      question: question,
+    });
     setSaving(false);
   }
 
@@ -98,8 +115,9 @@ export default function CloudEditor() {
     if (!name) return;
 
     // Check if file with same name already exists (excluding current file)
-    const duplicateFile = files.find(f => 
-      f.id !== file.id && f.name.toLowerCase() === name.trim().toLowerCase()
+    const duplicateFile = files.find(
+      (f) =>
+        f.id !== file.id && f.name.toLowerCase() === name.trim().toLowerCase(),
     );
     if (duplicateFile) {
       alert(`File "${name}" already exists!`);
@@ -116,7 +134,10 @@ export default function CloudEditor() {
 
     await supabase.from("files").delete().eq("id", file.id);
 
-    if (active?.id === file.id) setActive(null);
+    if (active?.id === file.id) {
+      setActive(null);
+      setQuestion("");
+    }
 
     loadFiles();
   }
@@ -157,9 +178,11 @@ export default function CloudEditor() {
       <div className="w-64 bg-gradient-to-b from-slate-900 to-slate-950 p-4 border-r border-slate-700/50 flex flex-col shadow-lg">
         {/* Header */}
         <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-700/30">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Files</span>
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
+            Files
+          </span>
 
-          <button 
+          <button
             className="text-sm font-semibold px-2 py-1 rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 transition-all duration-200 hover:shadow-lg hover:shadow-blue-500/20 hover:cursor-pointer"
             onClick={() => setCreating(true)}
           >
@@ -195,6 +218,7 @@ export default function CloudEditor() {
                 onClick={() => {
                   setActive(f);
                   setOriginal(f.code);
+                  setQuestion(f.question || "");
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault();
@@ -211,7 +235,9 @@ export default function CloudEditor() {
                 <span className="text-lg opacity-70 group-hover:opacity-100 transition-opacity">
                   {getIcon(f.name)}
                 </span>
-                <span className="flex-1 truncate text-sm font-medium">{f.name}</span>
+                <span className="flex-1 truncate text-sm font-medium">
+                  {f.name}
+                </span>
                 {active?.id === f.id && (
                   <div className="w-2 h-2 rounded-full bg-blue-400"></div>
                 )}
@@ -224,41 +250,56 @@ export default function CloudEditor() {
       {/* Main Editor */}
       <div className="flex-1 flex flex-col">
         {/* Top Bar */}
-        <div className="flex justify-between items-center bg-gradient-to-r from-slate-900 to-slate-800 px-6 py-3 border-b border-slate-700/50 shadow-md">
-          <div className="flex items-center gap-3">
-            <span className="font-semibold text-lg text-slate-100">{active?.name || "No File Selected"}</span>
+        {/* Top Bar */}
+        <div className="flex flex-col gap-3 bg-gradient-to-r from-slate-900 to-slate-800 px-6 py-3 border-b border-slate-700/50 shadow-md">
+          {/* Row 1 — File + Buttons */}
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <span className="font-semibold text-lg text-slate-100">
+                {active?.name || "No File Selected"}
+              </span>
 
-            {unsaved && (
-              <div className="flex items-center gap-1 px-2 py-1 bg-amber-500/20 text-amber-300 rounded-full text-xs font-medium">
-                <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></div>
-                Unsaved
-              </div>
-            )}
-          </div>
-
-          <div className="flex gap-3">
-            <button 
-              className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 hover:shadow-lg hover:shadow-green-500/30 active:scale-95 hover:cursor-pointer"
-              onClick={save}
-              disabled={saving}
-            >
-              {saving ? (
-                <span className="flex items-center gap-2">
-                  <span className="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                  Saving...
-                </span>
-              ) : (
-                "Save"
+              {unsaved && (
+                <div className="flex items-center gap-1 px-2 py-1 bg-amber-500/20 text-amber-300 rounded-full text-xs font-medium">
+                  <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></div>
+                  Unsaved
+                </div>
               )}
-            </button>
+            </div>
 
-            <button
-              className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/30 active:scale-95 hover:cursor-pointer"
-              onClick={runCode}
-            >
-              ▶ Run
-            </button>
+            <div className="flex gap-3">
+              <button
+                className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 hover:shadow-lg hover:shadow-green-500/30 active:scale-95 hover:cursor-pointer"
+                onClick={save}
+                disabled={saving}
+              >
+                {saving ? (
+                  <span className="flex items-center gap-2">
+                    <span className="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    Saving...
+                  </span>
+                ) : (
+                  "Save"
+                )}
+              </button>
+
+              <button
+                className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 hover:shadow-lg hover:shadow-purple-500/30 active:scale-95 hover:cursor-pointer"
+                onClick={runCode}
+              >
+                ▶ Run
+              </button>
+            </div>
           </div>
+
+          {/* Row 2 — Question Section */}
+          <textarea
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="Type your question here..."
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 resize-none"
+            rows={2}
+          />
         </div>
 
         {/* Editor */}
@@ -279,15 +320,23 @@ export default function CloudEditor() {
 
         {/* Console */}
         <div className="bg-slate-950 border-t border-slate-700/50 p-4 h-40 overflow-auto font-mono text-sm flex flex-col">
-          <div className="text-slate-500 text-xs mb-2 uppercase tracking-wider font-semibold">Output</div>
-          <div className={`flex-1 font-mono text-sm ${
-            output.includes("Error") || output.includes("error")
-              ? "text-red-400"
-              : output
-              ? "text-green-400"
-              : "text-slate-500"
-          }`}>
-            {output || <span className="text-slate-600">Run your code to see output...</span>}
+          <div className="text-slate-500 text-xs mb-2 uppercase tracking-wider font-semibold">
+            Output
+          </div>
+          <div
+            className={`flex-1 font-mono text-sm ${
+              output.includes("Error") || output.includes("error")
+                ? "text-red-400"
+                : output
+                  ? "text-green-400"
+                  : "text-slate-500"
+            }`}
+          >
+            {output || (
+              <span className="text-slate-600">
+                Run your code to see output...
+              </span>
+            )}
           </div>
         </div>
       </div>
