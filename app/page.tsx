@@ -1,5 +1,5 @@
-import CloudEditor from "@/components/CloudEditor";
+import EditorLayout from "@/components/CodeEditor/EditorLayout";
 
-export default function Page(){
-  return <CloudEditor/>
+export default function Page() {
+  return <EditorLayout />;
 }
